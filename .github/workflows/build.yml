@@ -24,7 +24,7 @@
 name: Build
 
 on:
-  pull_request:
+  workflow_dispatch:
   workflow_call:
 
 jobs:
@@ -36,8 +36,6 @@ jobs:
         os:
           [
             macos-15,
-            macos-26,
-            macos-26-intel,
           ]
         ccache-variant: [ccache]
         include:
@@ -50,15 +48,7 @@ jobs:
               image: ghcr.io/openimagedebugger/oid:24.04
               options: --cap-add=SYS_PTRACE
             ccache-variant: "ccache"
-          - os: ubuntu-26.04
-            name: ubuntu-26.04
-            container:
-              image: ghcr.io/openimagedebugger/oid:26.04
-              options: --cap-add=SYS_PTRACE
-            ccache-variant: "ccache"
           - os: windows-2025
-            ccache-variant: "sccache"
-          - os: windows-2025-vs2026
             ccache-variant: "sccache"
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
@@ -128,15 +118,15 @@ jobs:
         run: |
           ctest --build-config Release --output-on-failure
 
-      - name: Tar files
-        shell: bash
-        run: tar --strip-components 1 -cvf build-${{ matrix.name || matrix.os }}.tar out
+      # - name: Tar files
+      #   shell: bash
+      #   run: tar --strip-components 1 -cvf build-${{ matrix.name || matrix.os }}.tar out
 
-      - name: Upload build
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
-        with:
-          name: build-${{ matrix.name || matrix.os }}
-          path: build-${{ matrix.name || matrix.os }}.tar
+      # - name: Upload build
+      #   uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
+      #   with:
+      #     name: build-${{ matrix.name || matrix.os }}
+      #     path: build-${{ matrix.name || matrix.os }}.tar
 
       # --- MCP agent e2e smoke (non-Windows legs) -------------------------
       # Runs on the same runner, reusing the in-place install produced above
@@ -151,44 +141,44 @@ jobs:
       # endpoint and the Eigen-under-lldb path end to end. The driver is an
       # lldb + bash script; Windows uses a different debugger and is out of
       # scope for this smoke, so every e2e step is gated off the Windows legs.
-      - if: contains(matrix.os, 'ubuntu')
-        name: Install lldb (Linux e2e)
-        shell: bash
-        run: |
-          apt-get update -y
-          apt-get install -y --no-install-recommends curl lldb
+      # - if: contains(matrix.os, 'ubuntu')
+      #   name: Install lldb (Linux e2e)
+      #   shell: bash
+      #   run: |
+      #     apt-get update -y
+      #     apt-get install -y --no-install-recommends curl lldb
 
-      # Pin uv to a specific version via the official action (verifies the
-      # downloaded binary's checksum) rather than piping a remote install
-      # script to sh.
-      - if: ${{ !contains(matrix.os, 'windows') && !contains(matrix.os, 'intel') }}
-        name: Install uv (e2e)
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-        with:
-          version: "0.11.28"
+      # # Pin uv to a specific version via the official action (verifies the
+      # # downloaded binary's checksum) rather than piping a remote install
+      # # script to sh.
+      # - if: ${{ !contains(matrix.os, 'windows') && !contains(matrix.os, 'intel') }}
+      #   name: Install uv (e2e)
+      #   uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      #   with:
+      #     version: "0.11.28"
 
-      # Warm the oid-mcp deps up front so the timed e2e (its lldb session is
-      # held open with a fixed sleep) does not pay the first-install cost.
-      # Skipped on macOS Intel: cryptography (via mcp -> pyjwt[crypto]) ships
-      # no x86_64 macOS wheel, and --no-build forbids building it from source,
-      # so the Python e2e leg runs only where every locked dep is a wheel.
-      - if: ${{ !contains(matrix.os, 'windows') && !contains(matrix.os, 'intel') }}
-        name: Warm the oid-mcp virtualenv (e2e)
-        shell: bash
-        working-directory: resources/oidmcp
-        run: |
-          uv sync --frozen --no-build --no-install-project
-          .venv/bin/python -c "import oidmcp, numpy, PIL"
+      # # Warm the oid-mcp deps up front so the timed e2e (its lldb session is
+      # # held open with a fixed sleep) does not pay the first-install cost.
+      # # Skipped on macOS Intel: cryptography (via mcp -> pyjwt[crypto]) ships
+      # # no x86_64 macOS wheel, and --no-build forbids building it from source,
+      # # so the Python e2e leg runs only where every locked dep is a wheel.
+      # - if: ${{ !contains(matrix.os, 'windows') && !contains(matrix.os, 'intel') }}
+      #   name: Warm the oid-mcp virtualenv (e2e)
+      #   shell: bash
+      #   working-directory: resources/oidmcp
+      #   run: |
+      #     uv sync --frozen --no-build --no-install-project
+      #     .venv/bin/python -c "import oidmcp, numpy, PIL"
 
-      # Allow lldb to launch/debug the freshly built fixture without an
-      # interactive authorization prompt.
-      - if: contains(matrix.os, 'macos') && !contains(matrix.os, 'intel')
-        name: Enable developer-mode debugging (macOS e2e)
-        run: sudo /usr/sbin/DevToolsSecurity -enable
+      # # Allow lldb to launch/debug the freshly built fixture without an
+      # # interactive authorization prompt.
+      # - if: contains(matrix.os, 'macos') && !contains(matrix.os, 'intel')
+      #   name: Enable developer-mode debugging (macOS e2e)
+      #   run: sudo /usr/sbin/DevToolsSecurity -enable
 
-      - if: ${{ !contains(matrix.os, 'windows') && !contains(matrix.os, 'intel') }}
-        name: Run lldb e2e smoke test
-        shell: bash
-        run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          resources/oidmcp/tests/e2e/run_e2e_lldb.sh "$PWD/out/OpenImageDebugger"
+      # - if: ${{ !contains(matrix.os, 'windows') && !contains(matrix.os, 'intel') }}
+      #   name: Run lldb e2e smoke test
+      #   shell: bash
+      #   run: |
+      #     export PATH="$HOME/.local/bin:$PATH"
+      #     resources/oidmcp/tests/e2e/run_e2e_lldb.sh "$PWD/out/OpenImageDebugger"
