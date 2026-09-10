@@ -36,12 +36,12 @@
 name: "CodeQL"
 
 on:
-  push:
-    branches: [ "main" ]
+  # push:
+  #   branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  schedule:
-    - cron: '45 12 * * 6'
+  # schedule:
+  #   - cron: '45 12 * * 6'
 
 # One analysis per ref at a time. Without this nothing supersedes anything, so
 # every push and every PR synchronize adds a run and none of them ever stand
